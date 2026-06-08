@@ -1,0 +1,35 @@
+name: IaC Workflow (Terraform)
+run-name: terraform ${{ inputs.action }}
+on: 
+ workflow_dispatch:
+ inputs:
+ action:
+ type: choice
+ options:
+ - apply
+ - destroy
+ - plan
+ env: 
+ type: choice
+ options:
+ - dev
+ - prod
+jobs:
+ terraform-action:
+ environment: ${{ inputs.env}}
+ run-on: ubuntu-latest
+ steps:
+ -name: Clone Github Repo
+ uses: actions/checkout@v6
+
+ -name: Configure AWS credentials
+ uses: aws-actions/configure-aws-credentials@v4
+ with:
+ aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID}}
+ aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY}}
+ aws-region:
+ -name: Infra initiate
+ run: terraform init
+ -name: terraform apply
+ if: ${{inputs.action == 'apply'}}
+ run: terraform apply -auto-approve
