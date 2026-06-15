@@ -7,7 +7,7 @@ terraform {
     bucket = "digilians-tfstate"
     key = "digilians,tfstate"
     region = "eu-west-1"
-    dynamodb_table = "esraa_trerraform_locks_digilians" 
+   # dynamodb_table = "esraa_trerraform_locks_digilians" 
   } 
 }
 
