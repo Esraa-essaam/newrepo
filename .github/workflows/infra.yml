@@ -19,6 +19,7 @@ jobs:
   terraform:
     name: 'Terraform Action'
     runs-on: ubuntu-latest
+    environment: dev # السطر ده اللي هيخليه يبص فوق في الـ Environment secrets
 
     defaults:
       run:
