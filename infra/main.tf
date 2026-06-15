@@ -162,9 +162,7 @@ resource "aws_launch_template" "web_lt" {
   }
 
   # حقن ملفات السكريبت والـ HTML
-  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-  user_data = base64encode("<h1>Hello from Esraa's Terraform Web Server!</h1>")  }))
-
+  user_data = base64encode("#!/bin/bash\necho '<h1>Hello from Esraa's Terraform Web Server!</h1>' > /var/www/html/index.html")
   lifecycle {
     create_before_destroy = true
   }
