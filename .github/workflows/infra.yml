@@ -2,23 +2,23 @@ name: IaC Workflow (Terraform)
 run-name: terraform ${{ inputs.action }}
 on: 
  workflow_dispatch:
- inputs:
- action:
- type: choice
- options:
- - apply
- - destroy
+  inputs:
+   action:
+    type: choice
+   options:
+   - apply
+   - destroy
  - plan
  env: 
  type: choice
  options:
  - dev
  - prod
-jobs:
- terraform-action:
- environment: ${{ inputs.env}}
- run-on: ubuntu-latest
- steps:
+  jobs:
+  terraform-action:
+  environment: ${{ inputs.env}}
+  run-on: ubuntu-latest
+  steps:
  -name: Clone Github Repo
  uses: actions/checkout@v6
 

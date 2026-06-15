@@ -7,5 +7,6 @@ terraform {
     bucket = "digilians-tfstate"
     key = "digilians,tfstate"
     region = "eu-west-1"
+    dynamodb_table = "YOUR_DYNAMODB_TABLE_NAME" // the denamodb name should write 
   } 
 }

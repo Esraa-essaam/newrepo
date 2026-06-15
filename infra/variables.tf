@@ -1,7 +1,9 @@
 variable "vpc_cidr" {
-  type = string
+  type    = string
+  default = "10.20.0.0/16"
 }
 
 variable "vpc_name" {
-  type = string
+  type    = string
+  default = "digilians-lnb"
 }
