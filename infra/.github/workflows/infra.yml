@@ -20,9 +20,7 @@ jobs:
     name: 'Terraform Action'
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: ./infra
+  
 
     steps:
       - name: Clone Github Repo
