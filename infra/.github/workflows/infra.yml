@@ -1,6 +1,9 @@
 name: IaC Workflow (Terraform)
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       action:
@@ -44,7 +47,7 @@ jobs:
         run: terraform plan
 
       - name: Terraform Apply
-        if: ${{ github.event.inputs.action == 'apply' }}
+        if: ${{ github.event.inputs.action == 'apply' || github.event_name == 'push' }}
         run: terraform apply -auto-approve
 
       - name: Terraform Destroy
