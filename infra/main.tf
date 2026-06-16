@@ -1,131 +1,58 @@
-resource "aws_vpc" "lnb_vpc" {
-  cidr_block       = var.vpc_cidr
-  instance_tenancy = "default"
+# 1. Internet Gateway
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.main.id # اتأكد من اسم الـ VPC عندك لو مختلف
 
   tags = {
-    Name = var.vpc_name
-  }
-
-  # تضمن تدمير الـ VPC القديمة تماماً وتحرير مكانها قبل البدء في إنشاء الجديدة
-  lifecycle {
-    create_before_destroy = false
+    Name = "main-igw"
   }
 }
 
-resource "aws_internet_gateway" "lnb_igw" {
-  vpc_id = aws_vpc.lnb_vpc.id
+# 2. Route Table & Route
+resource "aws_route_table" "rt" {
+  vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "${var.vpc_name}-igw"
+    Name = "public-route-table"
   }
 }
 
-# Public Subnet 1 (AZ: a)
-resource "aws_subnet" "public_subnet_1" {
-  vpc_id                  = aws_vpc.lnb_vpc.id
-  cidr_block              = "10.20.1.0/24"
-  availability_zone       = "eu-west-1a"
-  map_public_ip_on_launch = true 
-
-  tags = {
-    Name = "${var.vpc_name}-public-1"
-  }
-}
-
-# Public Subnet 2 (AZ: b)
-resource "aws_subnet" "public_subnet_2" {
-  vpc_id                  = aws_vpc.lnb_vpc.id
-  cidr_block              = "10.20.2.0/24"
-  availability_zone       = "eu-west-1b"
-  map_public_ip_on_launch = true 
-
-  tags = {
-    Name = "${var.vpc_name}-public-2"
-  }
-}
-
-resource "aws_route_table" "public_rt" {
-  vpc_id = aws_vpc.lnb_vpc.id
-
-  tags = {
-    Name = "${var.vpc_name}-public-rt"
-  }
-}
-
-# الـ Route اللي بيطلع للإنترنت
-resource "aws_route" "internet_route" {
-  route_table_id         = aws_route_table.public_rt.id
+resource "aws_route" "r" {
+  route_table_id         = aws_route_table.rt.id
   destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.lnb_igw.id
+  gateway_id             = aws_internet_gateway.gw.id
 }
 
-# ربط الـ Subnets بالـ Route Table
-resource "aws_route_table_association" "association_1" {
-  subnet_id      = aws_subnet.public_subnet_1.id
-  route_table_id = aws_route_table.public_rt.id
+# 3. Route Table Associations
+# اتأكد إن أسامي الـ subnets عندك في الكود هي public1 و public2 فعلاً
+resource "aws_route_table_association" "assoc_public1" {
+  subnet_id      = aws_subnet.public1.id
+  route_table_id = aws_route_table.rt.id
 }
 
-resource "aws_route_table_association" "association_2" {
-  subnet_id      = aws_subnet.public_subnet_2.id
-  route_table_id = aws_route_table.public_rt.id
+resource "aws_route_table_association" "assoc_public2" {
+  subnet_id      = aws_subnet.public2.id
+  route_table_id = aws_route_table.rt.id
 }
 
-# LB Security Group (يسمح بـ HTTP من أي مكان)
-resource "aws_security_group" "alb_sg" {
-  name        = "alb-security-group"
-  description = "Allow HTTP inbound traffic"
-  vpc_id      = aws_vpc.lnb_vpc.id
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-# EC2 Security Group (يسمح فقط من الـ ALB)
-resource "aws_security_group" "ec2_sg" {
-  name        = "ec2-security-group"
-  description = "Allow inbound traffic from ALB only"
-  vpc_id      = aws_vpc.lnb_vpc.id
-
-  ingress {
-    from_port       = 80
-    to_port         = 80
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb_sg.id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-resource "aws_lb" "web_alb" {
-  name               = "lnb-web-alb"
+# 4. Application Load Balancer (ALB)
+resource "aws_lb" "app_alb" {
+  name               = "app-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = [aws_subnet.public_subnet_1.id, aws_subnet.public_subnet_2.id]
+  subnets            = [aws_subnet.public1.id, aws_subnet.public2.id]
+
+  tags = {
+    Environment = "production"
+  }
 }
 
-resource "aws_lb_target_group" "web_tg" {
-  name        = "lnb-web-tg"
-  port        = 80
-  protocol    = "HTTP"
-  vpc_id      = aws_vpc.lnb_vpc.id
-  target_type = "instance"
+# 5. Target Group
+resource "aws_lb_target_group" "alb_tg" {
+  name     = "app-alb-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
 
   health_check {
     path                = "/"
@@ -133,60 +60,18 @@ resource "aws_lb_target_group" "web_tg" {
     unhealthy_threshold = 3
     timeout             = 5
     interval            = 30
+    matcher             = "200"
   }
 }
 
-resource "aws_lb_listener" "web_listener" {
-  load_balancer_arn = aws_lb.web_alb.arn
+# 6. ALB Listener
+resource "aws_lb_listener" "alb_listener" {
+  load_balancer_arn = aws_lb.app_alb.arn
   port              = "80"
   protocol          = "HTTP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.web_tg.arn
-  }
-}
-
-resource "aws_launch_template" "web_lt" {
-  name_prefix   = "lnb-web-template-"
-  image_id      = "ami-0c55b159cbfafe1f0" 
-  instance_type = "t2.micro"
-
-  network_interfaces {
-    associate_public_ip_address = true
-    security_groups             = [aws_security_group.ec2_sg.id]
-  }
-
-  metadata_options {
-    http_tokens = "required" 
-  }
-
-  # تعديل السكريبت لتثبيت وتفعيل خادم Apache (httpd) أولاً قبل كتابة ملف الـ HTML
-  user_data = base64encode(<<-EOF
-              #!/bin/bash
-              sudo dnf install -y httpd
-              sudo systemctl start httpd
-              sudo systemctl enable httpd
-              echo "<h1>Hello from Esraa's Terraform Web Server!</h1>" | sudo tee /var/www/html/index.html
-              EOF
-  )
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-resource "aws_autoscaling_group" "web_asg" {
-  name                = "lnb-web-asg"
-  vpc_zone_identifier = [aws_subnet.public_subnet_1.id, aws_subnet.public_subnet_2.id]
-  target_group_arns   = [aws_lb_target_group.web_tg.arn]
-  
-  desired_capacity    = 2
-  min_size            = 2
-  max_size            = 4
-
-  launch_template {
-    id      = aws_launch_template.web_lt.id
-    version = "$Latest"
+    target_group_arn = aws_lb_target_group.alb_tg.arn
   }
 }
