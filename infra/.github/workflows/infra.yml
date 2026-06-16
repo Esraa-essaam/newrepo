@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'Terraform Action to perform'
+        description: 'Terraform Action to perform manually'
         type: choice
         required: true
         default: 'apply'
@@ -20,7 +20,6 @@ jobs:
     name: 'Terraform Action'
     runs-on: ubuntu-latest
 
-   
     steps:
       - name: Clone Github Repo
         uses: actions/checkout@v4
@@ -38,15 +37,21 @@ jobs:
           terraform_version: 1.7.0
 
       - name: Terraform Init
+        working-directory: ./infra
         run: terraform init
 
       - name: Terraform Plan
+        working-directory: ./infra
         run: terraform plan
 
+      # الـ Apply مش هيشتغل لو عملتي push عادي، هيشتغل فقط لو شغلتيه يدوي بإيدك واشترطتي apply
       - name: Terraform Apply
-        if: ${{ github.event.inputs.action == 'apply' || github.event_name == 'push' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply' }}
+        working-directory: ./infra
         run: terraform apply -auto-approve
 
+      # الـ Destroy هيشتغل فقط لو شغلتيه يدوي بإيدك واشترطتي destroy
       - name: Terraform Destroy
-        if: ${{ github.event.inputs.action == 'destroy' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy' }}
+        working-directory: ./infra
         run: terraform destroy -auto-approve
