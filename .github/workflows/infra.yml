@@ -1,0 +1,59 @@
+name: IaC Workflow (Terraform)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Terraform Action to perform manually'
+        type: choice
+        required: true
+        default: 'plan'
+        options:
+          - plan
+          - apply
+          - destroy
+
+jobs:
+  terraform:
+    name: 'Terraform Action'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone Github Repo
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.0
+
+      - name: Terraform Init
+        working-directory: ./infra
+        run: terraform init
+
+      # الـ Plan هيشتغل في كل الحالات (سواء Push أو تشغيل يدوي)
+      - name: Terraform Plan
+        working-directory: ./infra
+        run: terraform plan
+
+      # الـ Apply مش هيشتغل لو عملتي push، هيشتغل فقط لو دخلتي بإيدك وعملتي Run وشغلتي Apply
+      - name: Terraform Apply
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply' }}
+        working-directory: ./infra
+        run: terraform apply -auto-approve
+
+      # الـ Destroy يدوي فقط
+      - name: Terraform Destroy
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy' }}
+        working-directory: ./infra
+        run: terraform destroy -auto-approve
