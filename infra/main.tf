@@ -119,7 +119,66 @@ resource "aws_lb_target_group" "alb_tg" {
   }
 }
 
-# 9. ALB Listener
+# 9. EC2 security group for the web server
+resource "aws_security_group" "web_sg" {
+  name        = "web-server-sg"
+  description = "Allow HTTP traffic from the ALB"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb_sg.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.vpc_name}-web-sg"
+  }
+}
+
+# 10. Amazon Linux 2 AMI lookup
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+}
+
+# 11. Web server EC2 instance
+resource "aws_instance" "web" {
+  ami                    = data.aws_ami.amazon_linux.id
+  instance_type          = var.instance_type
+  subnet_id              = aws_subnet.public1.id
+  associate_public_ip_address = true
+  vpc_security_group_ids = [aws_security_group.web_sg.id]
+  user_data              = templatefile("${path.module}/user_data.sh", {
+    html_content = file("${path.module}/index.html")
+  })
+
+  tags = {
+    Name = "${var.vpc_name}-web"
+  }
+}
+
+# 12. Attach EC2 instance to ALB target group
+resource "aws_lb_target_group_attachment" "web_attachment" {
+  target_group_arn = aws_lb_target_group.alb_tg.arn
+  target_id        = aws_instance.web.id
+  port             = 80
+}
+
+# 13. ALB Listener
 resource "aws_lb_listener" "alb_listener" {
   load_balancer_arn = aws_lb.app_alb.arn
   port              = "80"
