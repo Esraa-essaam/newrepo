@@ -19,7 +19,7 @@ jobs:
   terraform:
     name: 'Terraform Action'
     runs-on: ubuntu-latest
-    environment: dev # السطر ده اللي هيخليه يبص فوق في الـ Environment secrets
+    environment: dev
 
     defaults:
       run:
@@ -44,8 +44,15 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      - name: Terraform Plan
+      # تعديل: الـ Plan العادي يعمل فقط في حالة الـ Push أو اختيار Apply يدوياً
+      - name: Terraform Plan (Apply)
+        if: ${{ github.event.inputs.action == 'apply' || github.event_name == 'push' }}
         run: terraform plan
+
+      # تعديل: إذا تم اختيار Destroy يدوياً، يعرض الـ Plan خطة الهدم للتأكد من الموارد قبل مسحها
+      - name: Terraform Plan (Destroy)
+        if: ${{ github.event.inputs.action == 'destroy' }}
+        run: terraform plan -destroy
 
       - name: Terraform Apply
         if: ${{ github.event.inputs.action == 'apply' || github.event_name == 'push' }}

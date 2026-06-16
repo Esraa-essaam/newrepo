@@ -1,10 +1,14 @@
-
 resource "aws_vpc" "lnb_vpc" {
   cidr_block       = var.vpc_cidr
   instance_tenancy = "default"
 
   tags = {
     Name = var.vpc_name
+  }
+
+  # تضمن تدمير الـ VPC القديمة تماماً وتحرير مكانها قبل البدء في إنشاء الجديدة
+  lifecycle {
+    create_before_destroy = false
   }
 }
 
@@ -55,7 +59,7 @@ resource "aws_route" "internet_route" {
   gateway_id             = aws_internet_gateway.lnb_igw.id
 }
 
-# ربط الـ Subnets بالـ Route Table (بدل الـ Gateway اللي كان في كودك القديم)
+# ربط الـ Subnets بالـ Route Table
 resource "aws_route_table_association" "association_1" {
   subnet_id      = aws_subnet.public_subnet_1.id
   route_table_id = aws_route_table.public_rt.id
@@ -65,8 +69,6 @@ resource "aws_route_table_association" "association_2" {
   subnet_id      = aws_subnet.public_subnet_2.id
   route_table_id = aws_route_table.public_rt.id
 }
-
-
 
 # LB Security Group (يسمح بـ HTTP من أي مكان)
 resource "aws_security_group" "alb_sg" {
@@ -99,7 +101,7 @@ resource "aws_security_group" "ec2_sg" {
     from_port       = 80
     to_port         = 80
     protocol        = "tcp"
-    security_groups = [aws_security_group.alb_sg.id] # الربط بالـ ALB SG
+    security_groups = [aws_security_group.alb_sg.id]
   }
 
   egress {
@@ -109,7 +111,6 @@ resource "aws_security_group" "ec2_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
-
 
 resource "aws_lb" "web_alb" {
   name               = "lnb-web-alb"
@@ -127,7 +128,7 @@ resource "aws_lb_target_group" "web_tg" {
   target_type = "instance"
 
   health_check {
-    path                = "/index.html"
+    path                = "/"
     healthy_threshold   = 3
     unhealthy_threshold = 3
     timeout             = 5
@@ -146,10 +147,9 @@ resource "aws_lb_listener" "web_listener" {
   }
 }
 
-
 resource "aws_launch_template" "web_lt" {
   name_prefix   = "lnb-web-template-"
-  image_id      = "ami-0c55b159cbfafe1f0" # ملحوظة: تأكدي إن الـ AMI دي لـ Amazon Linux 2023 في زون eu-west-1
+  image_id      = "ami-0c55b159cbfafe1f0" 
   instance_type = "t2.micro"
 
   network_interfaces {
@@ -158,11 +158,19 @@ resource "aws_launch_template" "web_lt" {
   }
 
   metadata_options {
-    http_tokens = "required" # تفعيل IMDSv2 إجباري للتاسك
+    http_tokens = "required" 
   }
 
-  # حقن ملفات السكريبت والـ HTML
-  user_data = base64encode("#!/bin/bash\necho '<h1>Hello from Esraa's Terraform Web Server!</h1>' > /var/www/html/index.html")
+  # تعديل السكريبت لتثبيت وتفعيل خادم Apache (httpd) أولاً قبل كتابة ملف الـ HTML
+  user_data = base64encode(<<-EOF
+              #!/bin/bash
+              sudo dnf install -y httpd
+              sudo systemctl start httpd
+              sudo systemctl enable httpd
+              echo "<h1>Hello from Esraa's Terraform Web Server!</h1>" | sudo tee /var/www/html/index.html
+              EOF
+  )
+
   lifecycle {
     create_before_destroy = true
   }
